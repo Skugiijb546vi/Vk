@@ -1,4 +1,4 @@
-name: Sebar_TV_Ultimate_Uploader
+name: Sebar_TV_Multi_Quality_DB
 
 on:
   workflow_dispatch:
@@ -10,9 +10,15 @@ on:
         description: 'ناوی فیلمەکە بنووسە'
         required: true
         default: 'فیلمی_نوێ'
+      firebase_section:
+        description: 'ناوی بەشەکە لە فایەربەیس (بۆ نموونە: Movies)'
+        required: true
+      firebase_id:
+        description: 'ئایدی فیلمەکە (بۆ نموونە: 12 یان m1)'
+        required: true
 
 jobs:
-  upload_job:
+  upload_and_database:
     runs-on: ubuntu-latest
     steps:
       - name: 🏗️ ئامادەکردنی چەکەکان
@@ -21,57 +27,92 @@ jobs:
           sudo apt-get install -y ffmpeg -qq
           pip install -q yt-dlp vk_api requests
 
-      - name: ⬇️ داگرتنی پارێزراو بەبێ بلۆکبوون
+      - name: ⬇️ داگرتنی پارێزراو
         run: |
           yt-dlp --impersonate chrome \
                  --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36" \
                  --retries 50 \
-                 --fragment-retries 50 \
-                 --retry-sleep 10 \
-                 --sleep-requests 0.5 \
                  --limit-rate 5M \
-                 --skip-unavailable-fragments \
-                 --ignore-errors \
-                 --continue \
                  --merge-output-format mp4 \
                  -o "video.mp4" \
                  "${{ github.event.inputs.video_url }}" || true
 
-      - name: 🚀 فڕێدانی ڤیدیۆکە بۆ ناو قەڵای ڤی کەی
+      - name: 🚀 فڕێدان بۆ قەڵاکە و دروستکردنی لیستی کوالێتییەکان
         env:
           VK_TOKEN: ${{ secrets.VK_TOKEN }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
         run: |
           python3 -c "
           import os
           import vk_api
+          import requests
           from vk_api.upload import VkUpload
           
-          token = os.environ.get('VK_TOKEN')
-          if not token:
-              print('هەڵە: کلیلە زێڕینەکە نەدۆزرایەوە!')
-              exit(1)
-              
+          vk_token = os.environ.get('VK_TOKEN')
+          fb_token = os.environ.get('FIREBASE_TOKEN')
           group_id = 236480315
           file_name = '${{ github.event.inputs.file_name }}'
+          fb_section = '${{ github.event.inputs.firebase_section }}'
+          fb_id = '${{ github.event.inputs.firebase_id }}'
           
           print('پەیوەندیکردن بە قەڵاکەوە...')
-          vk_session = vk_api.VkApi(token=token)
+          vk_session = vk_api.VkApi(token=vk_token)
+          vk = vk_session.get_api()
           upload = VkUpload(vk_session)
           
           if os.path.exists('video.mp4'):
-              print(f'بەرزکردنەوەی فیلمی: {file_name}')
-              video = upload.video(
+              print('بەرزکردنەوەی فیلمەکە...')
+              video_info = upload.video(
                   video_file='video.mp4',
                   name=file_name,
-                  description='ئەم ڤیدیۆیە تایبەتە بە داتابەیسی سەبار تیڤی.',
+                  description='ئەم فیلمە بەرزکراوەتەوە بۆ سەبار تیڤی، بە باشترین کوالێتی.',
                   group_id=group_id
               )
-              print('سەرکەوتوو بوو! ڤیدیۆکە گەیشتە ناو کۆگاکە.')
-              print('زانیاری ڤیدیۆکە:', video)
               
-              os.remove('video.mp4')
-              print('ڤیدیۆکە لەسەر گیتھەب سڕرایەوە بۆ پاککردنەوەی شوێن.')
-          else:
-              print('هەڵە: ڤیدیۆکە دانەگیراوە یان کێشەیەک هەیە!')
-              exit(1)
+              owner_id = video_info[0]['owner_id']
+              video_id = video_info[0]['video_id']
+              
+              print('دەرهێنانی هەموو کوالێتییەکان...')
+              get_vid = vk.video.get(videos=f'{owner_id}_{video_id}')
+              files = get_vid['items'][0].get('files', {})
+              
+              sources = []
+              source_id = 1
+              best_url = ''
+              
+              quality_map = {
+                  'mp4_360': '360p',
+                  'mp4_480': '480p',
+                  'mp4_720': '720p',
+                  'mp4_1080': '1080p'
+              }
+              
+              for vk_q, readable_q in quality_map.items():
+                  if vk_q in files:
+                      url = files[vk_q]
+                      sources.append({
+                          'id': source_id,
+                          'quality': readable_q,
+                          'type': 'video/mp4',
+                          'url': url
+                      })
+                      source_id += 1
+                      best_url = url
+              
+              if sources:
+                  print('لینکەکان ئامادەن، ناردن بۆ فایەربەیس بە کلیلە نهێنییەکەوە...')
+                  # بەستەری فایەربەیس بە زیادکردنی کلیلەکەی تۆوە بۆ کردنەوەی دەرگاکە
+                  db_url = f'https://sarko-43d61-default-rtdb.firebaseio.com/{fb_section}/{fb_id}.json?auth={fb_token}'
+                  
+                  payload = {
+                      'sources': sources,
+                      'title': file_name,
+                      'translation': 'دۆبلاژ',
+                      'url': best_url
+                  }
+                  
+                  requests.patch(db_url, json=payload)
+                  print('سەرکەوتوو بوو! فایەربەیس بە هەموو دیقەکانەوە نوێ کرایەوە پارێزراوانە.')
+              else:
+                  print('کێشە هەیە، هیچ لینکێک نەدۆزرایەوە.')
           "
