@@ -3,30 +3,25 @@ import vk_api
 import requests
 from vk_api.upload import VkUpload
 
-# هێنانی کلیلە شاراوەکان لە سندوقەکەی گیتھەب
-phone = os.environ.get('VK_PHONE')
-password = os.environ.get('VK_PASS')
-group_id = 236480315  # ئایدی قەڵاکەی خۆت
+# هێنانی کلیلە زێڕینەکە لە سندوقەکەی گیتھەب
+token = os.environ.get('VK_TOKEN')
+group_id = 236480315  # ئایدی قەڵاکەت
 
 def main():
-    print("دەستپێکردنی چوونەژوورەوە...")
-    # چوونەژوورەوە وەک ئەوەی تۆ بیت
-    vk_session = vk_api.VkApi(phone, password)
-    vk_session.auth()
+    print("چوونەژوورەوە بە کلیلە زێڕینەکە...")
+    vk_session = vk_api.VkApi(token=token)
     vk = vk_session.get_api()
     upload = VkUpload(vk_session)
 
-    # بەستەری ڤیدیۆیەکی کورتی ١ مێگابایتی تەنها بۆ تاقیکردنەوەی یەکەم
     video_url = "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"
     video_filename = "test_video.mp4"
 
-    print("دادەگرتنی ڤیدیۆکە بە خێرایی گیتھەب...")
+    print("دادەگرتنی ڤیدیۆکە...")
     response = requests.get(video_url)
     with open(video_filename, 'wb') as f:
         f.write(response.content)
 
-    print("بەرزکردنەوەی ڤیدیۆکە بۆ ناو کۆگای شاراوە...")
-    # بەرزکردنەوە بۆ کۆگاکە بە ناونیشانێکی تەواو کوردی
+    print("بەرزکردنەوەی ڤیدیۆکە بۆ ناو کۆگاکە...")
     video = upload.video(
         video_file=video_filename,
         name="ڤیدیۆی تاقیکردنەوەی سیستەم",
