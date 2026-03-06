@@ -20,6 +20,5 @@ jobs:
 
       - name: هەڵدانی ڤیدیۆکە بۆ ناو قەڵاکە
         env:
-          VK_PHONE: ${{ secrets.VK_PHONE }}
-          VK_PASS: ${{ secrets.VK_PASS }}
+          VK_TOKEN: ${{ secrets.VK_TOKEN }}
         run: python upload.py
