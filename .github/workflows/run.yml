@@ -25,7 +25,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg -qq
-          pip install -q yt-dlp vk_api requests
+          pip install -q yt-dlp curl_cffi vk_api requests
 
       - name: ⬇️ داگرتنی پارێزراو
         run: |
@@ -101,7 +101,6 @@ jobs:
               
               if sources:
                   print('لینکەکان ئامادەن، ناردن بۆ فایەربەیس بە کلیلە نهێنییەکەوە...')
-                  # بەستەری فایەربەیس بە زیادکردنی کلیلەکەی تۆوە بۆ کردنەوەی دەرگاکە
                   db_url = f'https://sarko-43d61-default-rtdb.firebaseio.com/{fb_section}/{fb_id}.json?auth={fb_token}'
                   
                   payload = {
@@ -115,4 +114,6 @@ jobs:
                   print('سەرکەوتوو بوو! فایەربەیس بە هەموو دیقەکانەوە نوێ کرایەوە پارێزراوانە.')
               else:
                   print('کێشە هەیە، هیچ لینکێک نەدۆزرایەوە.')
+          else:
+              print('هەڵە: فایلی ڤیدیۆکە نەدۆزرایەوە! دیارە داگرتنەکە شکستی هێناوە.')
           "
