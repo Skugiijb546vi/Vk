@@ -1,0 +1,25 @@
+name: Sebar TV Uploader
+
+on:
+  workflow_dispatch:
+
+jobs:
+  upload_video:
+    runs-on: ubuntu-latest
+    steps:
+      - name: هێنانی کۆدەکان
+        uses: actions/checkout@v3
+
+      - name: ئامادەکردنی ژینگەی پایتۆن
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: دابەزاندنی چەکەکان
+        run: pip install -r requirements.txt
+
+      - name: هەڵدانی ڤیدیۆکە بۆ ناو قەڵاکە
+        env:
+          VK_PHONE: ${{ secrets.VK_PHONE }}
+          VK_PASS: ${{ secrets.VK_PASS }}
+        run: python upload.py
