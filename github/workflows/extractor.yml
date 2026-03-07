@@ -1,0 +1,50 @@
+name: Sebar_TV_Link_Extractor
+
+on:
+  workflow_dispatch:
+    inputs:
+      video_id:
+        description: 'ئایدی ڤیدیۆکە دابنێ (بۆ نموونە: -236480315_456239021)'
+        required: true
+        default: '-236480315_456239021'
+
+jobs:
+  extract_links:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🏗️ ئامادەکردنی چەکەکان
+        run: pip install -q vk_api
+
+      - name: 🔍 ڕفاندنی لینکە دایرێکتەکان (.mp4)
+        env:
+          VK_TOKEN: ${{ secrets.VK_TOKEN }}
+        run: |
+          python3 -c "
+          import os, vk_api
+          
+          vk_token = os.environ.get('VK_TOKEN')
+          vid_id = '${{ github.event.inputs.video_id }}'
+          
+          vk_session = vk_api.VkApi(token=vk_token)
+          vk = vk_session.get_api()
+          
+          print(f'گەڕان بەدوای دیقەکان بۆ ڤیدیۆی: {vid_id} ...\n')
+          
+          try:
+              get_vid = vk.video.get(videos=vid_id)
+              if get_vid['count'] > 0:
+                  files = get_vid['items'][0].get('files', {})
+                  
+                  if files:
+                      print('✅ سەرکەوتوو بوو! ئەمەش لینکە دایرێکتەکان (.mp4):\n')
+                      for q, url in files.items():
+                          if 'mp4' in q:
+                              print(f'▶️ دیقەی {q.replace("mp4_", "")}p :')
+                              print(f'{url}\n')
+                  else:
+                      print('ڤیدیۆکە هەیە، بەڵام ڤی کەی هێشتا لینکەکانی نەداوەتەوە (ڕەنگە هێشتا پرۆسێس نەکرابێت).')
+              else:
+                  print('❌ هەڵە: ڤیدیۆکە نەدۆزرایەوە!')
+          except Exception as e:
+              print(f'کێشەیەک ڕوویدا: {e}')
+          "
