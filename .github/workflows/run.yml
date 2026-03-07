@@ -11,10 +11,10 @@ on:
         required: true
         default: 'فیلمی_نوێ'
       firebase_section:
-        description: 'ناوی بەشەکە لە فایەربەیس (بۆ نموونە: Movies)'
+        description: 'ناوی بەشەکە لە فایەربەیس'
         required: true
       firebase_id:
-        description: 'ئایدی فیلمەکە (بۆ نموونە: 12 یان m1)'
+        description: 'ئایدی فیلمەکە'
         required: true
 
 jobs:
@@ -37,7 +37,7 @@ jobs:
                  -o "video.mp4" \
                  "${{ github.event.inputs.video_url }}" || true
 
-      - name: 🚀 فڕێدان بۆ قەڵاکە و دروستکردنی لیستی کوالێتییەکان
+      - name: 🚀 فڕێدان، چاودێری زیرەک، و ناردن بۆ فایەربەیس
         env:
           VK_TOKEN: ${{ secrets.VK_TOKEN }}
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
@@ -70,7 +70,6 @@ jobs:
                   group_id=group_id
               )
               
-              # چارەسەری کێشەی KeyError: مەرجێکمان داناوە بۆ جۆری وەڵامەکە
               if isinstance(video_info, list):
                   vid_data = video_info[0]
               else:
@@ -81,55 +80,62 @@ jobs:
               if not video_id:
                   video_id = vid_data.get('id')
               
-              print('ڤیدیۆکە سەرکەوتوو بوو! چاوەڕێکردن بۆ ١٥ چرکە تا ڤی کەی دیقەکان ئامادە دەکات...')
-              time.sleep(15)
+              print('فیلمەکە بەسەرکەوتوویی گەیشتە ڤی کەی! ئێستا چاودێری دەکەین تا دیقەکان دروست دەبن...')
               
-              print('دەرهێنانی هەموو کوالێتییەکان...')
-              get_vid = vk.video.get(videos=f'{owner_id}_{video_id}')
+              # سیستەمی چاودێری زیرەک: ٤٠ جار پرسیار دەکات، هەر جارەی ٣٠ چرکە چاوەڕێ دەکات (کۆی گشتی ٢٠ خولەک)
+              files = {}
+              is_ready = False
               
-              if get_vid['count'] > 0:
-                  files = get_vid['items'][0].get('files', {})
-              else:
-                  files = {}
-              
-              sources = []
-              source_id = 1
-              best_url = ''
-              
-              quality_map = {
-                  'mp4_360': '360p',
-                  'mp4_480': '480p',
-                  'mp4_720': '720p',
-                  'mp4_1080': '1080p'
-              }
-              
-              for vk_q, readable_q in quality_map.items():
-                  if vk_q in files:
-                      url = files[vk_q]
-                      sources.append({
-                          'id': source_id,
-                          'quality': readable_q,
-                          'type': 'video/mp4',
-                          'url': url
-                      })
-                      source_id += 1
-                      best_url = url
-              
-              if sources:
-                  print('لینکەکان ئامادەن، ناردن بۆ فایەربەیس بە کلیلە نهێنییەکەوە...')
-                  db_url = f'https://sarko-43d61-default-rtdb.firebaseio.com/{fb_section}/{fb_id}.json?auth={fb_token}'
+              for i in range(40):
+                  print(f'هەوڵی ژمارە {i+1}... چاوەڕێکردن بۆ ٣٠ چرکە...')
+                  time.sleep(30)
+                  get_vid = vk.video.get(videos=f'{owner_id}_{video_id}')
                   
-                  payload = {
-                      'sources': sources,
-                      'title': file_name,
-                      'translation': 'دۆبلاژ',
-                      'url': best_url
+                  if get_vid['count'] > 0:
+                      files = get_vid['items'][0].get('files', {})
+                      # ئەگەر تەنها یەک دیقەش دروست بوبێت، واتە دەستی پێکردووە
+                      if any(q in files for q in ['mp4_360', 'mp4_480', 'mp4_720', 'mp4_1080']):
+                          is_ready = True
+                          print('مژدە! ڤی کەی لینکەکانی ئامادە کرد.')
+                          break
+              
+              if is_ready and files:
+                  sources = []
+                  source_id = 1
+                  best_url = ''
+                  
+                  quality_map = {
+                      'mp4_360': '360p',
+                      'mp4_480': '480p',
+                      'mp4_720': '720p',
+                      'mp4_1080': '1080p'
                   }
                   
-                  requests.patch(db_url, json=payload)
-                  print('سەرکەوتوو بوو! فایەربەیس بە هەموو دیقەکانەوە نوێ کرایەوە پارێزراوانە.')
+                  for vk_q, readable_q in quality_map.items():
+                      if vk_q in files:
+                          url = files[vk_q]
+                          sources.append({
+                              'id': source_id,
+                              'quality': readable_q,
+                              'type': 'video/mp4',
+                              'url': url
+                          })
+                          source_id += 1
+                          best_url = url
+                  
+                  if sources:
+                      print('ناردنی لینکەکان بۆ فایەربەیس...')
+                      db_url = f'https://sarko-43d61-default-rtdb.firebaseio.com/{fb_section}/{fb_id}.json?auth={fb_token}'
+                      payload = {
+                          'sources': sources,
+                          'title': file_name,
+                          'translation': 'دۆبلاژ',
+                          'url': best_url
+                      }
+                      requests.patch(db_url, json=payload)
+                      print('سەرکەوتوو بوو! فایەربەیس بە هەموو دیقەکانەوە نوێ کرایەوە پارێزراوانە.')
               else:
-                  print('کێشە هەیە، هیچ لینکێک نەدۆزرایەوە. ڕەنگە ڤی کەی کاتی زیاتری بوێت بۆ پرۆسێسکردنی ڤیدیۆکە.')
+                  print('هەڵە: دوای ٢٠ خولەک، ڤی کەی هەر لینکەکانی نەدا بە دەستەوە. تکایە دواتر خۆت سەیری داتابەیسەکە بکە.')
           else:
-              print('هەڵە: ڤیدیۆکە نەدۆزرایەوە لەناو گیتھەب!')
+              print('هەڵە: ڤیدیۆکە نەدۆزرایەوە!')
           "
