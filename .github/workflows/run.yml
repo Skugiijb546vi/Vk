@@ -44,6 +44,7 @@ jobs:
         run: |
           python3 -c "
           import os
+          import time
           import vk_api
           import requests
           from vk_api.upload import VkUpload
@@ -69,12 +70,27 @@ jobs:
                   group_id=group_id
               )
               
-              owner_id = video_info[0]['owner_id']
-              video_id = video_info[0]['video_id']
+              # چارەسەری کێشەی KeyError: مەرجێکمان داناوە بۆ جۆری وەڵامەکە
+              if isinstance(video_info, list):
+                  vid_data = video_info[0]
+              else:
+                  vid_data = video_info
+                  
+              owner_id = vid_data.get('owner_id')
+              video_id = vid_data.get('video_id')
+              if not video_id:
+                  video_id = vid_data.get('id')
+              
+              print('ڤیدیۆکە سەرکەوتوو بوو! چاوەڕێکردن بۆ ١٥ چرکە تا ڤی کەی دیقەکان ئامادە دەکات...')
+              time.sleep(15)
               
               print('دەرهێنانی هەموو کوالێتییەکان...')
               get_vid = vk.video.get(videos=f'{owner_id}_{video_id}')
-              files = get_vid['items'][0].get('files', {})
+              
+              if get_vid['count'] > 0:
+                  files = get_vid['items'][0].get('files', {})
+              else:
+                  files = {}
               
               sources = []
               source_id = 1
@@ -113,7 +129,7 @@ jobs:
                   requests.patch(db_url, json=payload)
                   print('سەرکەوتوو بوو! فایەربەیس بە هەموو دیقەکانەوە نوێ کرایەوە پارێزراوانە.')
               else:
-                  print('کێشە هەیە، هیچ لینکێک نەدۆزرایەوە.')
+                  print('کێشە هەیە، هیچ لینکێک نەدۆزرایەوە. ڕەنگە ڤی کەی کاتی زیاتری بوێت بۆ پرۆسێسکردنی ڤیدیۆکە.')
           else:
-              print('هەڵە: فایلی ڤیدیۆکە نەدۆزرایەوە! دیارە داگرتنەکە شکستی هێناوە.')
+              print('هەڵە: ڤیدیۆکە نەدۆزرایەوە لەناو گیتھەب!')
           "
