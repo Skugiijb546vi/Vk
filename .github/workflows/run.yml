@@ -1,13 +1,13 @@
-name: Sebar_TV_SeekStreaming_Master
+name: Sebar_TV_Final_Mission
 
 on:
   workflow_dispatch:
     inputs:
       video_url:
-        description: 'بەستەری ڤیدیۆ لێرە دابنێ'
+        description: 'بەستەری ڤیدیۆ (m3u8 یان لینکەکانی تر)'
         required: true
       file_name:
-        description: 'ناوی فیلمەکە'
+        description: 'ناوی فیلمەکە بۆ ناو فایەربەیس'
         required: true
       firebase_section:
         description: 'بەشەکە لە فایەربەیس'
@@ -17,30 +17,40 @@ on:
         required: true
 
 jobs:
-  fast_upload:
+  mission_start:
     runs-on: ubuntu-latest
     steps:
-      - name: 🏗️ ئامادەکردنی چەکەکان
+      - name: 🏗️ Setup Tools
         run: |
           sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg -qq
           pip install -q yt-dlp requests
 
-      - name: ⬇️ داگرتنی ڤیدیۆ
+      - name: ⬇️ Smart & Secure Download
         run: |
+          # ڕێک وەک ئەو شێوازە سەرکەوتووەی خۆت بۆ ئەوەی بلۆک نەبێت
           yt-dlp --impersonate chrome \
+                 --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36" \
                  --retries 50 \
+                 --fragment-retries 50 \
+                 --retry-sleep 10 \
+                 --sleep-requests 0.5 \
+                 --limit-rate 5M \
+                 --skip-unavailable-fragments \
+                 --ignore-errors \
+                 --continue \
                  --merge-output-format mp4 \
                  -o "video.mp4" \
                  "${{ github.event.inputs.video_url }}" || true
 
-      - name: 🚀 ناردنی یەکسەر بۆ SeekStreaming و فایەربەیس
+      - name: 🚀 Upload to SeekStreaming & Firebase
         env:
           FB_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
         run: |
           python3 -c "
           import os, requests
           
-          # کلیلەکەی تۆ کە ناردت
+          # زانیارییەکانت
           api_key = 'bad8b8344f2900c4f4ee94ea'
           fb_token = os.environ.get('FB_TOKEN')
           
@@ -53,18 +63,18 @@ jobs:
               srv_res = requests.get(f'https://api.seekstreaming.com/api/upload/server?key={api_key}').json()
               upload_url = srv_res['result']
               
-              print('٢. فڕێدانی فیلمەکە بۆ ناو سێرڤەر...')
+              print('٢. بەرزکردنەوەی فیلمەکە بۆ SeekStreaming...')
               files = {'file': open('video.mp4', 'rb')}
               data = {'key': api_key}
               up_res = requests.post(upload_url, data=data, files=files).json()
               
               file_code = up_res['result'][0]['filecode']
               
-              # دروستکردنی لینکی m3u8 بۆ پلەیەرەکەت
+              # دروستکردنی لینکی m3u8 ی جێگیر بۆ ExoPlayer
               direct_m3u8 = f'https://seekstreaming.com/hls/{file_code}.m3u8'
               print(f'لینک دروستکرا: {direct_m3u8}')
               
-              # ٣. نوێکردنەوەی فایەربەیس
+              # ٣. ناردن بۆ فایەربەیس
               db_url = f'https://sarko-43d61-default-rtdb.firebaseio.com/{fb_section}/{fb_id}.json?auth={fb_token}'
               payload = {
                   'title': file_name,
@@ -72,7 +82,11 @@ jobs:
                   'url': direct_m3u8
               }
               requests.patch(db_url, json=payload)
-              print('✅ تەواو! فیلمەکە چوو بۆ فایەربەیس و ١٧ هەزار کەسەکە دەتوانن بیبینن.')
+              print('✅ پیرۆزە! فایەربەیس نوێ کرایەوە و فیلمەکە ئامادەیە.')
+              
+              os.remove('video.mp4')
+              print('🗑️ فایلەکە لە سێرڤەری گیتھەب سڕایەوە.')
           else:
-              print('❌ هەڵە: ڤیدیۆکە دانەگیراوە.')
+              print('❌ هەڵە: ڤیدیۆکە دانەگیراوە! تکایە لینکەکە بپشکنە.')
+              exit(1)
           "
